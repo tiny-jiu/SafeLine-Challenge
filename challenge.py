@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Calculate and submit a SafeLine challenge response."""
+"""计算并提交雷池 WAF 的行为验证结果。"""
 
 import json
 import re
@@ -10,7 +10,7 @@ import requests
 
 
 if len(sys.argv) != 2:
-    print("Usage: python challenge.py http://target.example/")
+    print("用法：python challenge.py http://target.example/")
     sys.exit(1)
 
 URL = sys.argv[1]
@@ -19,7 +19,7 @@ ORIGIN = f"{PARSED.scheme}://{PARSED.netloc}"
 
 
 def calc(data):
-    """Mix the challenge bytes and encode the result as 6-bit values."""
+    """混合验证数据的字节内容，并将结果编码为一组 6 比特值，即 0 到 63 的数值。"""
     t, n, total = 1, len(data), sum(data)
     r = (6 + n + total) % 6 + 6
     for _ in range(r):
@@ -45,16 +45,16 @@ session.headers["User-Agent"] = (
     "AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36"
 )
 
-print(f"Target: {URL}")
+print(f"目标地址：{URL}")
 first = session.get(ORIGIN, timeout=15)
-print(f"Initial response: HTTP {first.status_code}")
+print(f"首次响应：HTTP {first.status_code}")
 
 match = re.search(r'SafeLineChallenge\("([^"]+)"', first.text)
 if not match:
-    print("No SafeLine challenge was found on this page.")
+    print("此页面中未找到雷池行为验证。")
     sys.exit(1)
 client_id = match.group(1)
-print(f"Client ID: {client_id}")
+print(f"客户端 ID：{client_id}")
 
 issued = session.post(
     f"{ORIGIN}/.safeline/challenge/v2/api/issue",
@@ -62,10 +62,10 @@ issued = session.post(
     timeout=15,
 )
 challenge = issued.json()["data"]
-print(f"Issue ID: {challenge['issue_id']}")
+print(f"验证 ID：{challenge['issue_id']}")
 
 result = calc(challenge["data"])
-print(f"Calculated result: {result}")
+print(f"计算结果：{result}")
 
 verified = session.post(
     f"{ORIGIN}/.safeline/challenge/v2/api/verify",
@@ -87,14 +87,14 @@ verified = session.post(
     timeout=15,
 )
 token = verified.json()["data"]["jwt"]
-print("Verification returned a token.")
+print("验证接口已返回令牌。")
 
 session.cookies.set("sl-challenge-jwt", token, path="/")
 session.cookies.set("sl-challenge-server", "local", path="/")
 
 final = session.get(ORIGIN, timeout=15)
 passed = final.status_code != 468 and "SafeLineChallenge" not in final.text
-print(f"Final response: HTTP {final.status_code}")
-print("Challenge passed." if passed else "Challenge did not pass.")
+print(f"最终响应：HTTP {final.status_code}")
+print("验证通过。" if passed else "验证未通过。")
 if passed:
     print(final.text[:800])
